@@ -238,6 +238,13 @@ td.num,th.num{text-align:right; font-variant-numeric:tabular-nums;}
   white-space:nowrap;
 }
 .btn-como-usar:hover{background:rgba(61,220,151,.30);}
+.btn-engrenagem{
+  font-family:inherit; font-size:16px; cursor:pointer; line-height:1;
+  background:rgba(255,255,255,.10); border:1px solid rgba(255,255,255,.20);
+  color:#FFFFFF; border-radius:8px; padding:6px 9px; display:flex; align-items:center;
+}
+.btn-engrenagem:hover{background:rgba(255,255,255,.20);}
+#menu-engrenagem{right:auto; left:0; min-width:220px;}
 .lampada-icon{font-style:normal; line-height:1;}
 
 /* ---------- Modal do tour ---------- */
@@ -388,6 +395,13 @@ td.num,th.num{text-align:right; font-variant-numeric:tabular-nums;}
     <button class="btn-como-usar" id="btn-como-usar" type="button">
       <span class="lampada-icon">💡</span> Como usar
     </button>
+    <button class="btn-engrenagem" id="btn-engrenagem" type="button" title="Configurações">⚙️</button>
+    <div class="menu-usuario" id="menu-engrenagem">
+      <div style="padding:10px 16px 6px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.4px; color:var(--muted);">Configurações</div>
+      <button type="button" id="btn-reset-vendas">Zerar vendas e caixa</button>
+      <button type="button" id="btn-reset-estoque">Zerar estoque e produtos</button>
+      <button type="button" id="btn-reset-tudo" class="sair">Resetar tudo</button>
+    </div>
     <button class="topo-usuario-botao" id="btn-menu-usuario" type="button">
       <span class="topo-usuario-nome" id="topo-nome-usuario"></span>
       <img class="avatar-circulo" id="topo-avatar-img" style="display:none;" alt="">
@@ -3480,6 +3494,86 @@ function renderizarPassoTour(){
 }
 
 $('btn-como-usar').addEventListener('click', () => abrirTour(0));
+
+/* ======================= ENGRENAGEM / CONFIGURAÇÕES ======================= */
+$('btn-engrenagem').addEventListener('click', (e) => {
+  e.stopPropagation();
+  $('menu-engrenagem').classList.toggle('aberto');
+  $('menu-usuario').classList.remove('aberto');
+});
+document.addEventListener('click', () => $('menu-engrenagem').classList.remove('aberto'));
+
+async function resetarDados(modo){
+  $('menu-engrenagem').classList.remove('aberto');
+
+  const mensagens = {
+    vendas: 'Isso vai apagar permanentemente TODAS as vendas, receitas, despesas e o histórico do caixa. Os produtos e o estoque continuam intactos.\n\nTem certeza?',
+    estoque: 'Isso vai apagar permanentemente TODOS os produtos cadastrados, movimentações de estoque e inventários. As vendas e o caixa continuam intactos.\n\nTem certeza?',
+    tudo: 'Isso vai apagar TUDO: produtos, vendas, estoque, caixa, movimentações e inventários. Você voltará do zero.\n\nTem certeza? Esta ação não pode ser desfeita.'
+  };
+
+  const confirmacoes = {
+    vendas: 'ZERAR VENDAS',
+    estoque: 'ZERAR ESTOQUE',
+    tudo: 'RESETAR TUDO'
+  };
+
+  if (!confirm(mensagens[modo])) return;
+
+  const confirmacao = window.prompt(
+    'Para confirmar, digite exatamente: ' + confirmacoes[modo]
+  );
+  if (confirmacao !== confirmacoes[modo]){
+    if (confirmacao !== null){
+      avisar('aviso-cadastro', 'Texto de confirmação incorreto. Nenhum dado foi apagado.', 'erro');
+    }
+    return;
+  }
+
+  const id = usuarioAtual.id;
+  let erros = [];
+
+  if (modo === 'vendas' || modo === 'tudo'){
+    const { error: e1 } = await db.from('caixa').delete().eq('user_id', id);
+    if (e1) erros.push('caixa: ' + e1.message);
+    else dados.caixa = [];
+  }
+
+  if (modo === 'estoque' || modo === 'tudo'){
+    const { error: e2 } = await db.from('movimentos').delete().eq('user_id', id);
+    if (e2) erros.push('movimentos: ' + e2.message);
+    else dados.movimentos = [];
+
+    const { error: e3 } = await db.from('inventarios').delete().eq('user_id', id);
+    if (e3) erros.push('inventários: ' + e3.message);
+    else dados.inventarios = [];
+
+    const { error: e4 } = await db.from('produtos').delete().eq('user_id', id);
+    if (e4) erros.push('produtos: ' + e4.message);
+    else dados.produtos = [];
+  }
+
+  if (modo === 'tudo'){
+    // movimentos e caixa já foram apagados nos blocos acima
+  }
+
+  if (erros.length){
+    avisar('aviso-cadastro', 'Erro ao resetar: ' + erros.join('; '), 'erro');
+    return;
+  }
+
+  itensInventario = {};
+  renderizarTudo();
+  renderizarInventarioEmAndamento();
+  renderizarHistoricoInventarios();
+
+  const nomes = { vendas: 'Vendas e caixa', estoque: 'Estoque e produtos', tudo: 'Todos os dados' };
+  alert(nomes[modo] + ' foram apagados com sucesso.');
+}
+
+$('btn-reset-vendas').addEventListener('click', () => resetarDados('vendas'));
+$('btn-reset-estoque').addEventListener('click', () => resetarDados('estoque'));
+$('btn-reset-tudo').addEventListener('click', () => resetarDados('tudo'));
 $('btn-tour-fechar').addEventListener('click', fecharTour);
 $('modal-tour').addEventListener('click', (e) => {
   if (e.target === $('modal-tour')) fecharTour();
